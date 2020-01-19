@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Kakao Login Example</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
+</head>
+<body>
+<div id="app" class="container p-5">
+
+    <div v-if="loading" class="spinner-grow" role="status">
+        <span class="sr-only">Loading...</span>
+    </div>
+    <div v-if="!loading" class="col-md-4">
+        <button class="btn btn-primary" v-if="isLogined === false" @click="kakaoLogin">카카오 로그인</button>
+        <div v-if="isLogined === true">
+            <img :src="profile_url" alt="profile image" class="rounded-circle rounded-sm" />
+            <a href="#" class="btn btn-dark" @click="kakaoLogout">로그아웃</a>
+        </div>
+    </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.6.10/vue.min.js"></script>
+<script src="//developers.kakao.com/sdk/js/kakao.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+<script>
+    var KAKAO_JS_ID = '20b1fc00b5c01b361c5e74e78f0908b3';
+    Kakao.init(KAKAO_JS_ID);
+
+    new Vue({
+        el: "#app",
+        data: {
+            profile_url: null,
+            isLogined: false,
+            loading: false
+        },
+        mounted: function () {
+            this.getKakaoLoginStatus();
+        },
+        methods: {
+            getKakaoLoginStatus: function () {
+                this.loading = true;
+                this.$nextTick(function () {
+
+                    /**
+                     * @param {Object} statusObj - 카카오 로그인 상태를 체크
+                     * @param {("connected" | "not_connected")} statusObj.status - 현재 로그인 상태
+                     * @param {Object} statusObj.user - status 가 connected 일 때, 사용자 정보
+                     * @param {{
+                     *     nickname: string
+                     *     profile_image: string
+                     *     thumbnail_image: string
+                     * }} statusObj.user.properties - 로그인 후 사용자 정보
+                     */
+                    Kakao.Auth.getStatusInfo(function (statusObj) {
+                        this.loading = false;
+                        if (statusObj.status === 'connected') {
+                            this.isLogined = true;
+
+                            console.log('Login Connected: ', statusObj);
+                            console.log(statusObj);
+                            this.profile_url = statusObj.user.properties.profile_image;
+                        } else {
+                            this.isLogined = false;
+                            console.log('Login Not Connected: ', statusObj);
+                        }
+                    }.bind(this));
+                })
+            },
+
+            /**
+             * 카카오 로그인 팝업창을 띄우고, 로그인 프로세스를 진행한다.
+             */
+            kakaoLogin: function() {
+                Kakao.Auth.login({
+                    success: this.kakaoLoginSuccessHandler.bind(this),
+                    fail: function (err) {
+                        alert(JSON.stringify(err));
+                    }
+                })
+            },
+            /**
+             * 카카오에 연결된 로그인 세션을 해제한다.
+             */
+            kakaoLogout: function () {
+                console.log('logout');
+                this.loading = true;
+                this.$nextTick(function () {
+                    Kakao.Auth.logout(function (logout) {
+                        this.loading = false;
+                        if (logout) {
+                            this.isLogined = false;
+                        }
+                    }.bind(this));
+                });
+            },
+
+            /**
+             * 카카오에서 발급받은, access_token 으로 서버에 /oauth/kakao 로 인증요청을 한 후,
+             * 서버에서 발급받은 토큰을 로컬스토리지로 저장한다.
+             *
+             * @param {{
+             *     access_token: string
+             * }} response - 리소스에 접근 할 수 있는 토큰 오브젝
+             */
+            kakaoLoginSuccessHandler: function (response) {
+                this.isLogined = true;
+                console.log('kakaoLoginSuccessHandler(): ', response);
+                this.$nextTick(function () {
+                    this.getKakaoLoginStatus();
+                    $.ajax({
+                        url: "http://localhost:8080/oauth/token",
+                        method: "post",
+                        contentType: "application/x-www-form-urlencoded",
+                        headers: {
+                            'authorization': 'Basic Y2xpZW50OnNlY3JldA==',
+                            'x-auth-token': 'Kakao ' + response.access_token
+                        },
+                        success: function (response) {
+                            console.log(response);
+                            localStorage.setItem("app_user", JSON.stringify(response));
+                        },
+                        error: function (err) {
+                            alert(JSON.stringify(err));
+                        }
+                    })
+                });
+            },
+        }
+    });
+</script>
+</body>
+</html>
